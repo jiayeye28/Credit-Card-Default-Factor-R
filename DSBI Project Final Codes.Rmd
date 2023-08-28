@@ -1,0 +1,619 @@
+---
+title: "Project Code Final"
+output:
+  html_document: default
+  word_document: default
+date: "2023-05-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+## Package Libraries
+```{r}
+rm(list = ls())
+```
+
+```{r}
+
+library(readr)
+
+
+library(tidyverse)
+# install.packages("visdat")
+library(visdat) # visualize missing values
+# install.packages("caret")
+library(caret)
+library(ggpubr)
+# install.packages("car")
+library(car)
+# install.packages("visdat")
+library(moments)
+
+library(dplyr)
+# install.packages("MASS")
+library(MASS)
+
+library(ggplot2)
+
+library(gridExtra)
+
+library("DescTools")
+
+library(rpart)
+library(rpart.plot)
+```
+
+# Read Dataset
+```{r}
+df <- read.csv("UCI_Credit_Card.csv")
+df <- as_tibble(df)
+glimpse(df)
+```
+
+##  Drop `ID` column
+```{r}
+df <- df[,-1]
+head(df)
+```
+
+
+# Find correlation between the target variables and independent variables
+```{r}
+library(corrplot)
+#Find the correlation of the dataset
+corplotdf <- cor(df, method = "pearson")
+col_gd <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(corplotdf, method = "color", col = col_gd(200),
+         type = "upper", order = "hclust",
+         addCoef.col = "Black",
+         tl.col = "black", tl.srt = 45, number.cex = 0.3,tl.cex = 0.4)
+```
+
+#  Rename response variable to `DEFAULT` and convert to `Yes` or `No`
+```{r}
+df<-df %>% 
+   rename(DEFAULT = default.payment.next.month)
+
+# Replace encoding with corresponding string for EDA, we will one-hot encode later
+df <- df %>%
+  mutate(DEFAULT = as.factor(ifelse(DEFAULT == "1", "Yes", "No")),
+         SEX = as.factor(ifelse(SEX == "1", "Male", "Female")),
+         EDUCATION = as.factor(ifelse(EDUCATION == "1", "Graduate School",
+                                     ifelse(EDUCATION == "2", "University",
+                                            ifelse(EDUCATION == "3", "High School",
+                                                   ifelse(EDUCATION == "4", "Other", "Unknown"))))),
+         MARRIAGE = as.factor(ifelse(MARRIAGE == "1", "Married",
+                                     ifelse(MARRIAGE == "2", "Single", "Other")))
+         )
+```
+
+## Check Missing Values
+```{r}
+sum(is.na(df))
+vis_miss(df)
+```
+There is no missing values
+
+# EDA
+## Visualization
+
+```{r}
+# default and limit_balance
+d0 <- ggplot(df, aes(factor(DEFAULT), (LIMIT_BAL/1000))) + geom_boxplot()
+d0
+```
+```{r}
+#default and bill payment
+d1 <- ggplot(df, aes(factor(DEFAULT), (BILL_AMT1/1000))) + geom_boxplot()
+d1
+```
+```{r}
+d8 <- ggplot(df, aes(factor(DEFAULT), (PAY_AMT1))) + geom_boxplot()
+d8
+```
+
+```{r}
+#default and bill payment
+d7 <- ggplot(df, aes(factor(DEFAULT), (PAY_0))) + geom_boxplot()
+d7
+```
+
+
+```{r}
+# SEX, limit balance education
+d2 <- ggplot(df, aes(factor(SEX), (LIMIT_BAL/1000), fill=EDUCATION)) + 
+  geom_boxplot() +
+  xlab("Gender") + 
+  ylab("BLimit(x1000 NT$)") + 
+  scale_fill_brewer(palette = "Accent")
+d2
+```
+
+```{r}
+# Balance limits ,education and gender
+d3 <- ggplot(df, aes(factor(EDUCATION), (LIMIT_BAL/1000), fill=DEFAULT)) + 
+  geom_boxplot() +
+  xlab("Education") + 
+  ylab("BLimit(x1000 NT$)") + 
+  scale_fill_brewer(palette = "Paired")
+d3
+```
+```{r}
+d3 <- ggplot(df, aes(factor(MARRIAGE), (LIMIT_BAL/1000), fill=DEFAULT)) + 
+  geom_boxplot() +
+  xlab("MARRIAGE") + 
+  ylab("BLimit(x1000 NT$)") + 
+  scale_fill_brewer(palette = "Paired")
+d3
+```
+
+
+```{r}
+# Balance limit, marraige, education
+d4 <- ggplot(df, aes(factor(MARRIAGE), (LIMIT_BAL/1000), fill=EDUCATION)) + 
+  geom_boxplot() +
+  xlab("Marriage") + 
+  ylab("BLimit(x1000 NT$)") + 
+  scale_fill_brewer(palette = "Paired")
+d4
+```
+```{r}
+# Balance limits ,education and gender
+d6 <- ggplot(df, aes(factor(SEX), (LIMIT_BAL/1000), fill=DEFAULT)) + 
+  geom_boxplot() +
+  xlab("Education") + 
+  ylab("BLimit(x1000 NT$)") + 
+  scale_fill_brewer(palette = "Paired")
+d6
+```
+
+```{r}
+d5 <- ggplot(df, aes(factor(PAY_0), (BILL_AMT1/10000), fill=DEFAULT)) + 
+  geom_boxplot() +
+  xlab("Repayment status in September") + 
+  ylab("BILL_AMT1(x1000 NT$)") + 
+  scale_fill_brewer(palette = "Paired")
+d5
+```
+```{r}
+ggplot(df, aes(x = DEFAULT, fill = DEFAULT)) +
+  geom_bar() +
+  labs(title = "Default Status",
+       x = "Default",
+       y = "Count")
+
+```
+```{r}
+# install.packages("gridExtra")  # Install the package
+library(gridExtra)  # Load the package
+
+```
+
+```{r}
+graph1 <- ggplot(data=df, aes(x=BILL_AMT1,fill=DEFAULT)) + geom_histogram() +
+  labs(title = "BILL_AMT1", x ="BILL_AMT1",fill = "DEFAULT") +
+  scale_fill_manual(values=c("#56B4E9", "#FF9999")) +
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+
+graph2 <- ggplot(data=df, aes(x=BILL_AMT2,fill=DEFAULT)) + geom_histogram() +
+  labs(title = "BILL_AMT2", x ="BILL_AMT2",fill = "DEFAULT") +
+   scale_fill_manual(values=c("#56B4E9", "#FF9999"))
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+
+graph3 <- ggplot(data=df, aes(x=BILL_AMT3,fill=DEFAULT)) + geom_histogram() +
+  labs(title = "BILL_AMT3", x ="BILL_AMT3",fill = "DEFAULT") +
+   scale_fill_manual(values=c("#56B4E9", "#FF9999"))
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+
+graph4 <- ggplot(data=df, aes(x=BILL_AMT4,fill=DEFAULT)) + geom_histogram() +
+  labs(title = "BILL_AMT4", x ="BILL_AMT4",fill = "DEFAULT") +
+   scale_fill_manual(values=c("#56B4E9", "#FF9999"))
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+
+grid.arrange(graph1,graph2,graph3,graph4, ncol=2)
+
+``` 
+
+```{r}
+graph5 <- ggplot(data=df, aes(x=PAY_AMT1,fill=DEFAULT)) + geom_histogram(binwidth = 50000) +
+  labs(title = "Pay_AMT1", x ="Pay_AMT1",fill = "DEFAULT") +
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+graph5
+
+graph6 <- ggplot(data=df, aes(x=PAY_AMT2,fill=DEFAULT)) + geom_histogram(binwidth =  50000) +
+  labs(title = "Pay_AMT2", x ="Pay_AMT2",fill = "DEFAULT") +
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+  
+graph7 <- ggplot(data=df, aes(x=PAY_AMT3,fill=DEFAULT)) + geom_histogram(binwidth =  50000) +
+  labs(title = "Pay_AMT3", x ="Pay_AMT3",fill = "DEFAULT") +
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+
+graph8 <- ggplot(data=df, aes(x=PAY_AMT4,fill=DEFAULT)) + geom_histogram(binwidth =  50000) +
+  labs(title = "Pay_AMT4", x ="Pay_AMT4",fill = "DEFAULT") +
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+
+grid.arrange(graph5,graph6,graph7,graph8,ncol=2)
+
+
+```
+```{r}
+graph1 <- ggplot(data=df, aes(x=PAY_0,fill=DEFAULT)) + geom_histogram() +
+  labs(title = "PAY_0", x ="PAY_0",fill = "DEFAULT") +
+  scale_fill_manual(values=c("#56B4E9", "#FF9999")) +
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+
+graph2 <- ggplot(data=df, aes(x=PAY_2,fill=DEFAULT)) + geom_histogram() +
+  labs(title = "PAY_2", x ="PAY_2",fill = "DEFAULT") +
+   scale_fill_manual(values=c("#56B4E9", "#FF9999"))
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+
+graph3 <- ggplot(data=df, aes(x=PAY_3,fill=DEFAULT)) + geom_histogram() +
+  labs(title = "PAY_3", x ="PAY_3",fill = "DEFAULT") +
+   scale_fill_manual(values=c("#56B4E9", "#FF9999"))
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+
+graph4 <- ggplot(data=df, aes(x=PAY_4,fill=DEFAULT)) + geom_histogram() +
+  labs(title = "PAY_4", x ="PAY_4",fill = "DEFAULT") +
+   scale_fill_manual(values=c("#56B4E9", "#FF9999"))
+  theme(axis.text.x = element_text(angle = 45,hjust=1))
+
+graph1
+grid.arrange(graph1,graph2,graph3,graph4, ncol=2)
+```
+
+```{r}
+# define numeric variable
+df_quant <- df %>%
+  select_if(is.numeric)
+```
+
+```{r}
+# install.packages("corrplot")
+library(corrplot)
+```
+
+
+```{r}
+#Find the correlation of the dataset
+corplotdf <- cor(df_quant, method = "pearson")
+col_gd <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+
+corrplot(corplotdf, method = "color", col = col_gd(200),
+         type = "upper", order = "hclust",
+         addCoef.col = "Black",
+         tl.col = "black", tl.srt = 45, number.cex = 0.5,tl.cex = 0.4)
+```
+```{r}
+# install.packages("ggthemes")
+library(ggthemes)
+```
+
+```{r}
+library(dplyr)
+df_sampled <- df %>% sample_n(5000)
+
+ggplot(data = df_sampled,aes(x=AGE,y =LIMIT_BAL/1000,group=DEFAULT,color=DEFAULT,
+                           shape=SEX))+
+  scale_shape_manual(values=c('Male' = "O", 'Female' = "+"),labels=c("Male", "Female"))+
+  scale_color_manual(values=c('No' = "grey", 'Yes' = "red"),labels=c("NO", "YES"))+
+  geom_point(size=4)
+```
+
+```{r}
+ggplot(data = df_sampled,aes(x=PAY_AMT1/10000,y =LIMIT_BAL/1000,group=DEFAULT,color=EDUCATION,
+                           shape=DEFAULT))+
+  scale_shape_manual(values=c('No' = "+", 'Yes' = "o"),labels=c("NO", "YES"))+
+  scale_color_manual(values=c('Graduate School' = "blue",'High School'="yellow"),labels=c("Graduate School","High School"))+
+  geom_point(size=4)
+```
+
+
+```{r}
+p1 <- ggplot(df, aes(x = PAY_AMT1, y = BILL_AMT1, col = DEFAULT)) +
+  geom_point()+ geom_smooth(method=lm,fullrange=TRUE)
+p1
+```
+
+
+
+#Preprocessed
+
+## Convert datatype to `factor`
+Let's convert some int variables into factors, which indicate categorical variables in R. 
+```{r}
+df<-df%>%
+   mutate(
+          PAY_0=as.factor(PAY_0),
+          PAY_2=as.factor(PAY_2),
+          PAY_3=as.factor(PAY_3),
+          PAY_4=as.factor(PAY_4),
+          PAY_5=as.factor(PAY_5),
+          PAY_6=as.factor(PAY_6)
+          )
+```
+
+##Hot-one coding
+```{r}
+# One-Hot Encode Categorical Variables (except 'Pay_n', as they indicate ordinal values)
+# `fullRank = T` == `dropfirst=T`(in python), this is to prevent multicollinearity
+dmy <- dummyVars(" ~ SEX + EDUCATION + MARRIAGE", data = df, fullRank = T) 
+df_transformed <- data.frame(predict(dmy, newdata = df))
+
+glimpse(df_transformed)
+
+# Drop SEX, EDUCATION, MARRIAGE from df
+df_encoded <- df[, -c(2, 3, 4)]
+
+# Combine df with encoded columns
+df_encoded <- cbind(df_encoded, df_transformed)
+
+df_encoded <- df_encoded%>%
+   mutate(
+          SEX.Male =as.factor(SEX.Male),
+          EDUCATION.High.School=as.factor(EDUCATION.High.School),
+          EDUCATION.Other=as.factor(EDUCATION.Other),
+          EDUCATION.University =as.factor(EDUCATION.University),
+          EDUCATION.Unknown =as.factor(EDUCATION.Unknown),
+          MARRIAGE.Other=as.factor(MARRIAGE.Other),
+          MARRIAGE.Single=as.factor(MARRIAGE.Single)
+          )
+
+glimpse(df_encoded)
+```
+
+## Skewness Correction
+```{r}
+# Split features into df_quant (quant features), df_cat (qual features)
+df_quant <- df_encoded %>%
+  select_if(is.numeric)
+
+
+df_cat <- df_encoded %>% 
+  select_if(is.factor)
+```
+
+## Skewness Correction
+```{r}
+# Split features into df_quant (quant features), df_cat (qual features)
+df_quant <- df_encoded %>%
+  select_if(is.numeric)
+
+
+df_cat <- df_encoded %>% 
+  select_if(is.factor)
+
+```
+
+
+```{r}
+# log/exponential transformation for positive/negative skewness
+# Define skewness correction function
+skew_autotransform <- function(DF, include=NULL, exclude=NULL, plot=FALSE, threshold=1) 
+  {
+  # Get list of column names that should be processed based on input parameters
+  if (is.null(include) & is.null(exclude)) {
+    colnames <- names(DF)
+  } else if (!is.null(include)) {
+    colnames <- include
+  } else if (!is.null(exclude)) {
+    colnames <- setdiff(names(DF), exclude)
+  } else {
+    print('No columns to process!')
+  }
+  
+  # Helper function that checks if all values are positive
+  make_positive <- function(series) {
+    minimum <- min(series)
+    # If minimum is negative, offset all values by a constant to move all values to positive territory
+    if (minimum <= 0) {
+      series <- series + abs(minimum) + 5 # offset with a large number tailored for this dataset
+    }
+    return(series)
+  }
+  
+  # Go through desired columns in DataFrame
+  for (col in colnames) {
+    # Get column skewness
+    skew <- skewness(DF[[col]])
+    transformed <- TRUE
+    
+    if (plot) {
+      # Prep the plot of original data
+      par(mfrow=c(1, 2))
+      hist(DF[[col]], col="lightblue", main=paste0("Original ", col), xlab=col)
+    }
+    
+    # If skewness is larger than threshold and positively skewed; If yes, apply appropriate transformation
+    if (abs(skew) > threshold & skew > 0) {
+      skewType <- 'positive'
+      # Make sure all values are positive
+      DF[[col]] <- make_positive(DF[[col]])
+      
+      # Apply log transformation 
+      DF[[col]] <- log(DF[[col]])
+      skew_new <- skewness(DF[[col]])
+    } 
+    else if (abs(skew) > threshold & skew < 0) {
+      skewType <- 'negative'
+      # Make sure all values are positive
+      DF[[col]] <- make_positive(DF[[col]])
+      
+        # Apply exp transformation 
+      DF[[col]] <- DF[[col]]^10
+      
+      skew_new <- skewness(DF[[col]])
+      
+    } else {
+      # Flag if no transformation was performed
+      transformed <- FALSE
+      skew_new <- skew
+    }
+    
+    # Compare before and after if plot is True
+    if (plot) {
+      cat('\n ------------------------------------------------------')     
+      if (transformed) {
+        cat('\n', col, 'had', skewType, 'skewness of', skew)
+        cat('\n Transformation yielded skewness of', skew_new)
+        hist(DF[[col]], col="salmon", main=paste0("Transformed ", col), xlab=col)
+      } else {
+        cat('\n NO TRANSFORMATION APPLIED FOR', col, '. Skewness =', skew)
+        hist(DF[[col]], col="lightblue", main=paste0("NO TRANSFORM ", col), xlab=col)
+      }
+    }
+  }
+  
+  return(DF)
+}
+```
+
+```{r}
+# Excluding "BILL_AMT6", as corrected to be much higher value, set threshold to be -1 to 1
+df_quant_skewed <- skew_autotransform(df_quant, exclude="BILL_AMT6", plot = T, threshold = 1)
+```
+
+## Outlier Removal
+```{r}
+cols <- names(df_quant_skewed)
+
+tukey_rule <- function(data, col){
+  Q1 <- quantile(data[[col]], 0.25)
+  Q3 <- quantile(data[[col]], 0.75)
+  IQR <- Q3 - Q1
+  upper_lim <- quantile(data[[col]], 0.5) + 2 * IQR
+  lower_lim <- quantile(data[[col]], 0.5) - 2 * IQR
+  outliers <- which(data[[col]] < lower_lim | data[[col]] >= upper_lim)
+  return(outliers)
+}
+
+# Identify outliers
+for (i in cols) {
+  outliers_Tukey <- tukey_rule(df_quant_skewed, i)
+  cat("Number of outliers in column", i, "based on Tukey's method:", length(outliers_Tukey), "\n")
+}
+```
+
+```{r}
+# Winsorize quant features
+
+# Winsorizing a vector means that a predefined quantum of the smallest and/or the largest values are replaced by less extreme values. Thereby the substitute values are the most extreme retained values.
+# https://www.rdocumentation.org/packages/DescTools/versions/0.99.48/topics/Winsorize
+
+cat("Descriptive Statistics Before\n")
+summary(df_quant_skewed)
+
+df_quant_winsorized <- df_quant_skewed
+
+for (i in cols) {
+  df_quant_winsorized[, i] <- Winsorize(df_quant_winsorized[, i], probs = c(0.05, 0.95))
+}
+
+cat("Descriptive Statistics After\n")
+summary(df_quant_winsorized)
+
+
+for (i in cols) {
+  par(mfrow=c(1, 2))
+  boxplot(df_quant_skewed[,i], horizontal=TRUE, main=paste("Origin Boxplot of", i), col="lightblue")
+boxplot(df_quant_winsorized[,i], horizontal=TRUE, main=paste("Winsorized Boxplot of", i), col="salmon")
+}
+
+
+```
+```{r}
+# Combine final cleaned df
+df_processed <- cbind(df_quant_winsorized, df_cat)
+head(df_processed)
+```
+
+```{r}
+names(df_processed)
+```
+
+
+## Split training and testing data sets
+```{r}
+set.seed(1)   # set a random seed 
+index <- sample(30000, 6000) # random selection of indices. (20%)
+```
+
+```{r}
+test<-df_processed%>%
+  filter(row_number() %in% index)
+
+training<-df_processed%>%setdiff(test)
+
+```
+
+```{r}
+table(training$DEFAULT)
+```
+
+```{r}
+status <- ggplot(data=training, aes(x=DEFAULT,fill=DEFAULT)) + 
+  geom_bar()+
+  labs(title = "Unbalanced Response Variable")
+status
+```
+
+
+### Undersample the Unbalanced Dataset
+```{r}
+# Undersample Dataset 
+library(ROSE)
+training_balanced <- ovun.sample(DEFAULT~.,data = training,
+                             p=0.5,seed = 1,method = "under")$data
+table(training_balanced$DEFAULT)
+```
+
+```{r}
+table(test$DEFAULT)
+```
+
+```{r}
+status <- ggplot(data=training_balanced, aes(x=DEFAULT,fill=DEFAULT)) + 
+  geom_bar()+
+  labs(title = "Balanced Response Variable")
+status
+```
+### True Positive Rate Checking (Rational Behind Undersample)
+```{r}
+# Balanced Dataset
+logit_model_balanced<-glm(DEFAULT~.,
+                 family="binomial",               
+                 data=training_balanced)                   
+```
+
+```{r}
+test$logit_pred_prob_balanced<-predict(logit_model_balanced,test,type="response")
+test$logit_pred_class_balanced <-ifelse(test$logit_pred_prob_balanced>0.5,"Yes","No") 
+test <- test%>%
+   mutate(
+          logit_pred_class_balanced =as.factor(logit_pred_class_balanced)
+          )
+confusionMatrix(test$logit_pred_class_balanced, test$DEFAULT, positive = "Yes")
+867/(524+867)
+```
+
+```{r}
+# Unbalanced Dataset
+logit_model_unbalanced<-glm(DEFAULT~.,  # generalized linear models
+                 family="binomial",               # specifying error distribution
+                 data=training)  
+```
+
+```{r}
+test$logit_pred_prob_unbalanced<-predict(logit_model_unbalanced,test,type="response")
+test$logit_pred_class_unbalanced<-ifelse(test$logit_pred_prob_unbalanced>0.5,"Yes","No") 
+test <- test%>%
+   mutate(
+          logit_pred_class_unbalanced =as.factor(logit_pred_class_unbalanced)
+          )
+confusionMatrix(test$logit_pred_class_unbalanced, test$DEFAULT,positive = "Yes")
+504/(887+504)
+
+# The TPR has dropped by much without undersampling 
+```
